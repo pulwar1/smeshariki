@@ -2,26 +2,195 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Тест на реакцию — Three.js</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>Bubble Pop Game — Modes</title>
   <style>
     body { margin: 0; overflow: hidden; background: #222; }
-    #results {
-      position: absolute; top: 10px; left: 10px; color: #fff; font-size: 20px;
-      background: rgba(0,0,0,0.7); padding: 10px; border-radius: 7px; z-index: 10; display:none;
+    #ui { position: absolute; top: 10px; left: 10px; color: #fff; font-size: 22px; z-index: 10; }
+    #menu {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7);
+      color: #fff; font-size: 32px; z-index: 20;
+      text-align: center;
     }
-    #timer {
-      position: absolute; top: 10px; right: 10px; color: #fff; font-size: 32px;
-      background: rgba(0,0,0,0.7); padding: 15px 25px; border-radius: 7px; z-index: 10;
-      font-weight: bold; font-family: monospace;
+    button {
+      margin-top: 15px; padding: 15px 30px;
+      font-size: 20px; cursor: pointer;
+      border-radius: 12px; border: none;
     }
   </style>
 </head>
 <body>
-<div id="results"></div>
-<div id="timer">20</div>
-<audio id="failSound" src="sounds/fail-sound.mp3" preload="auto"></audio>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-<script src="js/game.js"></script>
+
+<div id="menu">
+  <div>Лопай Шарики</div>
+  <img src="https://i.imgur.com/1QeQZ4F.png" style="width:180px; margin-top:20px; border-radius:12px;">
+  <div style="font-size:22px; margin-top:10px;">Выберите режим</div>
+  <button onclick="selectMode('easy')">Легко</button>
+  <button onclick="selectMode('medium')">Средне</button>
+  <button onclick="selectMode('hard')">Сложно</button>
+</div>
+
+<div id="ui">
+  Счёт: <span id="score">0</span><br>
+  Уровень: <span id="level">1</span><br>
+  Время: <span id="time">40</span>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<audio id="popSound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+
+  let score = 0;
+  let level = 1;
+  let timeLeft = 40;
+  let gameRunning = false;
+  let mode = 'easy';
+  let bubbleInterval;
+  let timerInterval;
+
+  const bubbles = [];
+  const sound = document.getElementById('popSound');
+
+  const modeSettings = {
+    easy:   { speed: 1, spawn: 900 },
+    medium: { speed: 2, spawn: 600 },
+    hard:   { speed: 3, spawn: 350 }
+  };
+
+  class Bubble {
+    constructor() {
+      this.x = Math.random() * canvas.width;
+      this.y = canvas.height + 50;
+      this.radius = 15 + Math.random() * (20 + level * 3);
+      this.speed = modeSettings[mode].speed + Math.random() * (1 + level);
+      this.color = `hsl(${Math.random() * 360}, 80%, 60%)`;
+    }
+    update() { this.y -= this.speed; }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+    }
+  }
+
+  function spawnBubble() {
+    bubbles.push(new Bubble());
+  }
+
+  function startTimer() {
+    timerInterval = setInterval(() => {
+      timeLeft--;
+
+      // большой текст при 3 секундах
+      if (timeLeft <= 3) {
+        document.getElementById('time').style.fontSize = '60px';
+        document.getElementById('time').style.color = 'red';
+      } else {
+        document.getElementById('time').style.fontSize = '22px';
+        document.getElementById('time').style.color = 'white';
+      }
+
+      document.getElementById('time').textContent = timeLeft;
+      if (timeLeft <= 0) endGame();
+    }, 1000);(() => {
+      timeLeft--;
+      document.getElementById('time').textContent = timeLeft;
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+  }
+
+  function selectMode(m) {
+    mode = m;
+    startGame();
+  }
+
+  function startGame() {
+    document.getElementById('menu').style.display = 'none';
+    score = 0;
+    level = 1;
+    timeLeft = 40;
+    gameRunning = true;
+    bubbles.length = 0;
+
+    document.getElementById('score').textContent = score;
+    document.getElementById('level').textContent = level;
+    document.getElementById('time').textContent = timeLeft;
+
+    clearInterval(bubbleInterval);
+    bubbleInterval = setInterval(spawnBubble, modeSettings[mode].spawn);
+
+    clearInterval(timerInterval);
+    startTimer();
+  }
+
+  function levelUp() {
+    level++;
+    document.getElementById('level').textContent = level;
+
+    clearInterval(bubbleInterval);
+    bubbleInterval = setInterval(spawnBubble, Math.max(200, modeSettings[mode].spawn - level * 40));
+  }
+
+  function endGame() {
+    gameRunning = false;
+    clearInterval(timerInterval);
+    clearInterval(bubbleInterval);
+
+    document.getElementById('menu').innerHTML = `
+      <div>Лопай Шарики</div>
+      <img src='https://i.imgur.com/1QeQZ4F.png' style='width:180px; margin-top:20px; border-radius:12px;'>
+      <div>Игра окончена</div>
+      <div>Счёт: ${score}</div>
+      <div style='font-size:22px;margin-top:10px;'>Выберите режим</div>
+      <button onclick=\"selectMode('easy')\">Легко</button>
+      <button onclick=\"selectMode('medium')\">Средне</button>
+      <button onclick=\"selectMode('hard')\">Сложно</button>
+      <button onclick=\"location.reload()\" style='background:#444;color:white;'>Выйти и зайти</button>
+    `;;
+    document.getElementById('menu').style.display = 'flex';
+  }
+
+  canvas.addEventListener('click', (e) => {
+    if (!gameRunning) return;
+
+    const mx = e.clientX;
+    const my = e.clientY;
+
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      const dist = Math.hypot(b.x - mx, b.y - my);
+
+      if (dist < b.radius) {
+        bubbles.splice(i, 1);
+        score++;
+        sound.currentTime = 0;
+        sound.play();
+        document.getElementById('score').textContent = score;
+
+        if (score % 10 === 0) levelUp();
+      }
+    }
+  });
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (gameRunning) {
+      bubbles.forEach(b => { b.update(); b.draw(); });
+    }
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>
+
 </body>
 </html>
